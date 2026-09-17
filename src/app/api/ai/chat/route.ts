@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import ZAI from 'z-ai-web-dev-sdk'
+import { ensureZAIConfig } from '@/lib/zai-config'
 import { getCurrentUser } from '@/lib/auth'
 import { db } from '@/lib/db'
 
@@ -127,6 +128,7 @@ export async function POST(req: NextRequest) {
 
     const systemPrompt = await buildSystemContext(user.id)
 
+    ensureZAIConfig()
     const zai = await ZAI.create()
     const completion = await zai.chat.completions.create({
       messages: [

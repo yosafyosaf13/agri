@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import fs from 'fs'
 import path from 'path'
 import ZAI from 'z-ai-web-dev-sdk'
+import { ensureZAIConfig } from '@/lib/zai-config'
 import { getCurrentUser } from '@/lib/auth'
 import { db } from '@/lib/db'
 
@@ -101,6 +102,7 @@ export async function POST(req: NextRequest) {
 
 كن دقيقًا وموجزًا (5-8 أسطر إجمالاً). إن لم تكن الصورة واضحة أو ليست لنبات، اذكر ذلك بصراحة.`
 
+    ensureZAIConfig()
     const zai = await ZAI.create()
     const response = await zai.chat.completions.createVision({
       messages: [

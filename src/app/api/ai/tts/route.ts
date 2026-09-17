@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import ZAI from 'z-ai-web-dev-sdk'
+import { ensureZAIConfig } from '@/lib/zai-config'
 import { getCurrentUser } from '@/lib/auth'
 
 // ─── POST /api/ai/tts — { text } → audio/wav binary ───
@@ -28,6 +29,7 @@ export async function POST(req: NextRequest) {
       text = text.slice(0, 1000)
     }
 
+    ensureZAIConfig()
     const zai = await ZAI.create()
     const response = await zai.audio.tts.create({
       input: text,

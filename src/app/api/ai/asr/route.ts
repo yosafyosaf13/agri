@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import ZAI from 'z-ai-web-dev-sdk'
+import { ensureZAIConfig } from '@/lib/zai-config'
 import { getCurrentUser } from '@/lib/auth'
 
 // ─── POST /api/ai/asr — { audio: base64 } → { text } ───
@@ -27,6 +28,7 @@ export async function POST(req: NextRequest) {
     // Strip optional data URL prefix
     const clean = audioB64.replace(/^data:audio\/[a-z0-9.+-]+;base64,/, '')
 
+    ensureZAIConfig()
     const zai = await ZAI.create()
     const response = await zai.audio.asr.create({
       file_base64: clean,

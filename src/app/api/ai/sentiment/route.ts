@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import ZAI from 'z-ai-web-dev-sdk'
+import { ensureZAIConfig } from '@/lib/zai-config'
 import { getCurrentUser } from '@/lib/auth'
 
 // ─── POST /api/ai/sentiment — { text } → { urgency, level, color, emoji, reason } ───
@@ -30,6 +31,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    ensureZAIConfig()
     const zai = await ZAI.create()
     const completion = await zai.chat.completions.create({
       messages: [

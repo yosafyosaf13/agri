@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import ZAI from 'z-ai-web-dev-sdk'
+import { ensureZAIConfig } from '@/lib/zai-config'
 import { getCurrentUser } from '@/lib/auth'
 
 // ─── POST /api/ai/actions — { notes, aiResult? } → { actions[] } ───
@@ -34,6 +35,7 @@ export async function POST(req: NextRequest) {
       ? `ملاحظات الزيارة:\n${notes}\n\nتشخيص الصورة بالـ AI:\n${aiResult}`
       : `ملاحظات الزيارة:\n${notes}`
 
+    ensureZAIConfig()
     const zai = await ZAI.create()
     const completion = await zai.chat.completions.create({
       messages: [
