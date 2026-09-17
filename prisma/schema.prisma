@@ -1,0 +1,176 @@
+// ═══════════════════════════════════════════════════════════════════
+//  نظام إدارة العمل الميداني الزراعي — Agricultural Field Work System
+//  Prisma schema — supports SQLite (local) + Turso (Vercel)
+//
+//  محلي:  DATABASE_URL=file:./db/custom.db
+//  Turso: DATABASE_URL=libsql://xxx.turso.io?authToken=xxx
+// ═══════════════════════════════════════════════════════════════════
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+  binaryTargets   = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url     = env("DATABASE_URL")
+}
+
+// ─── users — المستخدمون ───
+// الأدوار: admin (مسؤول النظام) | engineer (مهندس زراعي) | supervisor (مشرف) | team_lead (قائد فريق) | team_member (عضو فريق)
+model User {
+  id           Int      @id @default(autoincrement())
+  username     String   @unique
+  passwordHash String
+  fullName     String
+  role         String   @default("engineer")
+  phone        String?
+  specialty    String?  // التخصص: مكافحة آفات | تسميد | رش | ري | عام
+  teamId       Int?     // معرّف الفريق (إن كان عضواً في فريق)
+  active       Boolean  @default(true) // يمكن تعطيل الحساب دون حذفه
+  createdAt    DateTime @default(now())
+
+  farms  Farm[]
+  visits Visit[]
+  team   Team?     @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  leadingTeam Team? @relation("team_leader")
+}
+
+// ─── teams — فرق العمل (مكافحة، رش، تسميد...) ───
+model Team {
+  id          Int      @id @default(autoincrement())
+  name        String   // اسم الفريق: فريق المكافحة الشمالي، فريق الرش الجنوبي...
+  type        String   // النوع: pest_control | spraying | fertilizing | irrigation | general
+  leaderId    Int?     // قائد الفريق
+  createdAt   DateTime @default(now())
+
+  members  User[]
+  leader   User?  @relation("team_leader", fields: [leaderId], references: [id], onDelete: SetNull, map: "team_leader_fk")
+  @@unique([leaderId])
+}
+
+// ─── farms — المزارع ───
+model Farm {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  name      String
+  owner     String?
+  area      Float?
+  location  String?
+  // إحداثيات GPS + حدود المزرعة (GeoJSON polygon)
+  latitude  Float?
+  longitude Float?
+  boundary  String?  // GeoJSON polygon كنص JSON
+  createdAt DateTime @default(now())
+
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  crops          Crop[]
+  visits         Visit[]
+  infectionPoints InfectionPoint[]
+
+  @@index([userId])
+}
+
+// ─── crops — المحاصيل ───
+model Crop {
+  id            Int      @id @default(autoincrement())
+  farmId        Int
+  name          String
+  variety       String?
+  plantingDate  String?
+  area          Float?
+  status        String   @default("active")
+  createdAt     DateTime @default(now())
+
+  farm        Farm        @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  visits      Visit[]
+  treatments  Treatment[]
+  infectionPoints InfectionPoint[]
+
+  @@index([farmId])
+}
+
+// ─── visits — الزيارات ───
+model Visit {
+  id        Int      @id @default(autoincrement())
+  farmId    Int
+  cropId    Int?
+  userId    Int
+  visitDate String
+  notes     String?
+  aiResult  String?
+  createdAt DateTime @default(now())
+
+  farm   Farm  @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  crop   Crop? @relation(fields: [cropId], references: [id], onDelete: SetNull)
+  user   User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  photos VisitPhoto[]
+  treatments Treatment[]
+
+  @@index([farmId])
+  @@index([visitDate])
+}
+
+// ─── visit_photos — صور كل زيارة ───
+model VisitPhoto {
+  id        Int      @id @default(autoincrement())
+  visitId   Int
+  photoPath String
+  aiResult  String?
+  aiAnalyzedAt DateTime?
+  createdAt DateTime @default(now())
+
+  visit Visit @relation(fields: [visitId], references: [id], onDelete: Cascade)
+
+  @@index([visitId])
+}
+
+// ─── treatments — المعاملات ───
+model Treatment {
+  id        Int      @id @default(autoincrement())
+  cropId    Int
+  visitId   Int?
+  type      String
+  product   String?
+  dose      String?
+  nextDate  String?
+  notes     String?
+  done      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  crop  Crop   @relation(fields: [cropId], references: [id], onDelete: Cascade)
+  visit Visit? @relation(fields: [visitId], references: [id], onDelete: SetNull)
+
+  @@index([nextDate])
+  @@index([cropId])
+}
+
+// ─── infection_points — نقاط الإصابة (لفرق المكافحة) ───
+// أنواع: disease (مرض) | pest (آفة) | weed (حشيش) | nutrient (نقص عنصر)
+// شدة: low | medium | high
+// حالة: active (نشطة) | treated (تمت المعالجة) | resolved (تم الحل)
+model InfectionPoint {
+  id          Int      @id @default(autoincrement())
+  farmId      Int
+  cropId      Int?
+  latitude    Float    // خط العرض
+  longitude   Float    // خط الطول
+  type        String   // disease | pest | weed | nutrient
+  severity    String   @default("medium") // low | medium | high
+  description String?  // وصف الإصابة
+  photoPath   String?  // صورة الإصابة (اختياري)
+  reportedBy Int?      // من أبلغ عن الإصابة (userId)
+  teamId      Int?     // الفريق المسؤول عن المعالجة
+  status      String   @default("active") // active | treated | resolved
+  treatedAt   DateTime?
+  treatmentNotes String? // ملاحظات المعالجة
+  createdAt   DateTime @default(now())
+
+  farm  Farm  @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  crop  Crop? @relation(fields: [cropId], references: [id], onDelete: SetNull)
+
+  @@index([farmId])
+  @@index([status])
+  @@index([type])
+}
